@@ -1,4 +1,6 @@
 import streamlit as st
+import json
+import os
 import numpy as np
 import pandas as pd
 import joblib
@@ -11,28 +13,93 @@ import datetime
 st.set_page_config(page_title="Retail AI Dashboard", layout="wide")
 
 # ----------------------------
-# LOGIN SYSTEM
+# USER DATABASE (JSON FILE)
 # ----------------------------
-def login():
-    st.title("🔐 Login to Dashboard")
+USER_DB = "users.json"
+
+def load_users():
+    if not os.path.exists(USER_DB):
+        return {}
+    with open(USER_DB, "r") as f:
+        return json.load(f)
+
+def save_users(users):
+    with open(USER_DB, "w") as f:
+        json.dump(users, f)
+
+# ----------------------------
+# AUTH SYSTEM
+# ----------------------------
+def login_page():
+    st.title("🔐 Login")
+
+    users = load_users()
 
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
     if st.button("Login"):
-        if username == "admin" and password == "1234":
-            st.session_state["logged_in"] = True
+        if username in users and users[username] == password:
+            st.session_state["user"] = username
             st.success("Login successful ✅")
             st.rerun()
         else:
             st.error("Invalid credentials ❌")
 
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
+    if st.button("Go to Signup"):
+        st.session_state["page"] = "signup"
+        st.rerun()
 
-if not st.session_state["logged_in"]:
-    login()
+def signup_page():
+    st.title("📝 Signup")
+
+    users = load_users()
+
+    new_user = st.text_input("Create Username")
+    new_pass = st.text_input("Create Password", type="password")
+
+    if st.button("Signup"):
+        if new_user in users:
+            st.error("User already exists ❌")
+        elif new_user == "" or new_pass == "":
+            st.error("Fields cannot be empty ❌")
+        else:
+            users[new_user] = new_pass
+            save_users(users)
+            st.success("Account created! Go to login ✅")
+
+    if st.button("Back to Login"):
+        st.session_state["page"] = "login"
+        st.rerun()
+
+# ----------------------------
+# SESSION STATE INIT
+# ----------------------------
+if "user" not in st.session_state:
+    st.session_state["user"] = None
+
+if "page" not in st.session_state:
+    st.session_state["page"] = "login"
+
+# ----------------------------
+# ROUTING
+# ----------------------------
+if st.session_state["user"] is None:
+    if st.session_state["page"] == "login":
+        login_page()
+    else:
+        signup_page()
     st.stop()
+
+# ----------------------------
+# LOGOUT
+# ----------------------------
+with st.sidebar:
+    st.write(f"👤 Logged in as: {st.session_state['user']}")
+    if st.button("Logout"):
+        st.session_state["user"] = None
+        st.session_state["page"] = "login"
+        st.rerun()
 
 # ----------------------------
 # LOAD MODEL
@@ -44,46 +111,32 @@ def load_model():
 model = load_model()
 
 # ----------------------------
-# PREMIUM UI
+# UI
 # ----------------------------
-st.markdown("""
-<style>
-.main {background-color: #0e1117;}
-h1, h2, h3 {color: white;}
-.metric {
-    background: #1c1f26;
-    padding: 20px;
-    border-radius: 12px;
-    text-align: center;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.title("📊 Retail Demand Prediction AI")
+st.title("📊 Retail Demand Prediction Dashboard")
 
 # ----------------------------
-# SIDEBAR (NO LIMIT INPUTS)
+# INPUTS (NO LIMIT)
 # ----------------------------
-with st.sidebar:
-    st.header("⚙️ Inputs")
+col1, col2 = st.columns(2)
 
-    store_id = st.text_input("Store ID", "1")
-    sku_id = st.text_input("SKU ID", "1")
+store_id = col1.text_input("Store ID", "1")
+sku_id = col1.text_input("SKU ID", "1")
 
-    total_price = st.text_input("Selling Price (£)", "50")
-    base_price = st.text_input("Base Price (£)", "60")
+total_price = col2.text_input("Selling Price (£)", "50")
+base_price = col2.text_input("Base Price (£)", "60")
 
-    is_featured = st.selectbox("Featured?", ["No", "Yes"])
-    is_display = st.selectbox("Display?", ["No", "Yes"])
+is_featured = st.selectbox("Featured?", ["No", "Yes"])
+is_display = st.selectbox("Display?", ["No", "Yes"])
 
-# Convert inputs safely
+# Convert safely
 try:
     store_id = int(store_id)
     sku_id = int(sku_id)
     total_price = float(total_price)
     base_price = float(base_price)
 except:
-    st.error("❌ Please enter valid numeric values")
+    st.error("Enter valid numeric values ❌")
     st.stop()
 
 is_featured = 1 if is_featured == "Yes" else 0
@@ -101,7 +154,7 @@ day_sin = np.sin(2 * np.pi * today.day / 31)
 day_cos = np.cos(2 * np.pi * today.day / 31)
 
 # ----------------------------
-# DATAFRAME
+# DATA
 # ----------------------------
 input_data = pd.DataFrame({
     'store_id': [store_id],
@@ -123,32 +176,18 @@ if hasattr(model, "feature_names_in_"):
 # BUTTONS
 # ----------------------------
 col1, col2 = st.columns(2)
-
-predict_btn = col1.button("🔍 Predict Demand")
-optimize_btn = col2.button("📈 Optimize Price")
+predict_btn = col1.button("🔍 Predict")
+optimize_btn = col2.button("📈 Optimize")
 
 # ----------------------------
-# PREDICTION
+# PREDICT
 # ----------------------------
 if predict_btn:
     demand = model.predict(input_data)[0]
     revenue = demand * total_price
 
-    c1, c2 = st.columns(2)
-
-    c1.markdown(f"""
-    <div class="metric">
-    <h3>📦 Demand</h3>
-    <h2>{int(demand)}</h2>
-    </div>
-    """, unsafe_allow_html=True)
-
-    c2.markdown(f"""
-    <div class="metric">
-    <h3>💰 Revenue</h3>
-    <h2>£{revenue:.2f}</h2>
-    </div>
-    """, unsafe_allow_html=True)
+    st.success(f"📦 Demand: {int(demand)}")
+    st.success(f"💰 Revenue: £{revenue:.2f}")
 
 # ----------------------------
 # OPTIMIZATION
@@ -182,36 +221,18 @@ def optimize_price(sample_row):
     return prices, revenues, best_price, max_revenue
 
 # ----------------------------
-# OPTIMIZATION OUTPUT
+# OPTIMIZE OUTPUT
 # ----------------------------
 if optimize_btn:
     prices, revenues, best_price, max_rev = optimize_price(input_data)
 
-    c1, c2 = st.columns(2)
+    st.success(f"🎯 Best Price: £{best_price:.2f}")
+    st.success(f"💰 Max Revenue: £{max_rev:.2f}")
 
-    c1.markdown(f"""
-    <div class="metric">
-    <h3>🎯 Best Price</h3>
-    <h2>£{best_price:.2f}</h2>
-    </div>
-    """, unsafe_allow_html=True)
-
-    c2.markdown(f"""
-    <div class="metric">
-    <h3>💰 Max Revenue</h3>
-    <h2>£{max_rev:.2f}</h2>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ----------------------------
-    # INTERACTIVE PLOTLY CHART
-    # ----------------------------
     df_plot = pd.DataFrame({
         "Price": prices,
         "Revenue": revenues
     })
 
-    fig = px.line(df_plot, x="Price", y="Revenue",
-                  title="Revenue vs Price Optimization")
-
+    fig = px.line(df_plot, x="Price", y="Revenue", title="Revenue vs Price")
     st.plotly_chart(fig, use_container_width=True)
