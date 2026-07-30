@@ -3,7 +3,10 @@
 
 **An AI-powered dashboard that predicts product demand and optimizes pricing for maximum revenue in retail.**
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit)](https://price-driven-demand-prediction-in-retail-using-machine-learning ∙ main ∙ app.py)
+## 🌐 Live Demo
+
+🚀 **Try the App Here:**  
+👉 https://price-driven-demand-prediction-in-retail-using-machine-learnin.streamlit.app/
 
 ---
 
