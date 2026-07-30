@@ -1,3 +1,4 @@
+%%writefile app.py
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -8,99 +9,124 @@ import datetime
 # ----------------------------
 # PAGE CONFIG
 # ----------------------------
-st.set_page_config(page_title="Retail AI Dashboard", layout="wide")
+st.set_page_config(
+    page_title="Demand Prediction Dashboard",
+    page_icon="📊",
+    layout="wide"
+)
+
+# ----------------------------
+# LOAD MODEL (SAFE)
+# ----------------------------
+@st.cache_resource
+def load_model():
+    try:
+        return joblib.load("model.pkl")
+    except Exception as e:
+        st.error("❌ Model not found! Please upload model.pkl to GitHub.")
+        st.stop()
+
+model = load_model()
 
 # ----------------------------
 # CUSTOM CSS (PREMIUM UI)
 # ----------------------------
 st.markdown("""
 <style>
-body {
-    background-color: #f5f7fa;
-}
-.card {
-    background-color: white;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
-    text-align: center;
-}
-.header {
-    background: linear-gradient(90deg, #4CAF50, #2E7D32);
-    padding: 20px;
-    border-radius: 12px;
-    text-align: center;
+.main {background-color: #0e1117;}
+h1, h2, h3 {color: #ffffff;}
+.stButton>button {
+    background-color: #4CAF50;
     color: white;
+    border-radius: 10px;
+    height: 3em;
+    width: 100%;
+}
+.metric-box {
+    background-color: #1c1f26;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ----------------------------
-# LOAD MODEL
+# TITLE
 # ----------------------------
-try:
-    model = joblib.load("model.pkl")
-except:
-    st.error("❌ Model not found. Upload model.pkl to GitHub.")
-    st.stop()
+st.title("📊 Price-Driven Demand Prediction Dashboard")
+st.markdown("### 💡 Predict demand & optimize pricing using Machine Learning")
 
 # ----------------------------
-# HEADER
+# SIDEBAR (IMPROVED)
 # ----------------------------
-st.markdown("""
-<div class="header">
-<h1>🛒 Retail Demand Prediction AI</h1>
-<p>Smart Pricing • Demand Forecasting • Revenue Optimization</p>
-</div>
-""", unsafe_allow_html=True)
+with st.sidebar:
+    st.header("⚙️ Control Panel")
 
-st.markdown("")
+    store_id = st.number_input(
+        "Store ID",
+        min_value=1,
+        max_value=100,
+        value=1,
+        step=1
+    )
 
-# ----------------------------
-# SIDEBAR (PREMIUM)
-# ----------------------------
-st.sidebar.markdown("## ⚙️ Control Panel")
+    sku_id = st.number_input(
+        "SKU ID",
+        min_value=1,
+        max_value=5000,
+        value=1,
+        step=1
+    )
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🏬 Store Info")
+    total_price = st.number_input(
+        "Selling Price (£)",
+        min_value=1.0,
+        max_value=1000.0,
+        value=50.0,
+        step=1.0,
+        format="%.2f"
+    )
 
-store_id = st.sidebar.number_input("Store ID", 1, 100, 1)
-sku_id = st.sidebar.number_input("SKU ID", 1, 5000, 1)
+    base_price = st.number_input(
+        "Base Price (£)",
+        min_value=1.0,
+        max_value=1000.0,
+        value=60.0,
+        step=1.0,
+        format="%.2f"
+    )
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 💰 Pricing")
+    is_featured = st.selectbox("Featured Product?", ["No", "Yes"])
+    is_display = st.selectbox("On Display?", ["No", "Yes"])
 
-total_price = st.sidebar.slider("Selling Price (£)", 1.0, 500.0, 50.0)
-base_price = st.sidebar.slider("Base Price (£)", 1.0, 500.0, 60.0)
+    st.markdown("---")
+    st.info("💡 Tip: Keep base price ≥ selling price for realistic results")
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📢 Promotion")
-
-is_featured = st.sidebar.selectbox("Featured Product", ["No", "Yes"])
-is_display = st.sidebar.selectbox("On Display", ["No", "Yes"])
-
+# Convert Yes/No to 0/1
 is_featured = 1 if is_featured == "Yes" else 0
 is_display = 1 if is_display == "Yes" else 0
 
-st.sidebar.markdown("---")
-st.sidebar.info("💡 Adjust inputs to predict demand & optimize pricing")
+# ----------------------------
+# VALIDATION
+# ----------------------------
+if base_price < total_price:
+    st.warning("⚠️ Selling price is higher than base price (unusual case)")
 
-# ----------------------------
-# FEATURE ENGINEERING
-# ----------------------------
 discount = base_price - total_price
 
+# ----------------------------
+# TIME FEATURES
+# ----------------------------
 today = datetime.datetime.now()
-month = today.month
-day = today.day
 
-month_sin = np.sin(2 * np.pi * month / 12)
-month_cos = np.cos(2 * np.pi * month / 12)
-day_sin = np.sin(2 * np.pi * day / 31)
-day_cos = np.cos(2 * np.pi * day / 31)
+month_sin = np.sin(2 * np.pi * today.month / 12)
+month_cos = np.cos(2 * np.pi * today.month / 12)
+day_sin = np.sin(2 * np.pi * today.day / 31)
+day_cos = np.cos(2 * np.pi * today.day / 31)
 
 # ----------------------------
-# INPUT DATA
+# DATAFRAME
 # ----------------------------
 input_data = pd.DataFrame({
     'store_id': [store_id],
@@ -119,54 +145,43 @@ if hasattr(model, "feature_names_in_"):
     input_data = input_data[model.feature_names_in_]
 
 # ----------------------------
-# BUTTONS
+# MAIN LAYOUT (2 COLUMNS)
 # ----------------------------
-col_btn1, col_btn2 = st.columns(2)
-
-with col_btn1:
-    predict_clicked = st.button("🔍 Predict Demand")
-
-with col_btn2:
-    optimize_clicked = st.button("📈 Optimize Price")
-
-st.markdown("---")
+col1, col2 = st.columns(2)
 
 # ----------------------------
 # PREDICTION
 # ----------------------------
-if predict_clicked:
-    try:
+with col1:
+    st.subheader("📦 Demand Prediction")
+
+    if st.button("Predict Demand"):
         demand = model.predict(input_data)[0]
         revenue = demand * total_price
 
-        col1, col2 = st.columns(2)
-
-        col1.markdown(f"""
-        <div class="card">
-        <h4>📦 Predicted Demand</h4>
-        <h2>{int(demand)}</h2>
+        st.markdown(f"""
+        <div class="metric-box">
+            <h3>📦 Demand</h3>
+            <h2>{int(demand)}</h2>
         </div>
         """, unsafe_allow_html=True)
 
-        col2.markdown(f"""
-        <div class="card">
-        <h4>💰 Expected Revenue</h4>
-        <h2>£{revenue:.2f}</h2>
+        st.markdown(f"""
+        <div class="metric-box">
+            <h3>💰 Revenue</h3>
+            <h2>£{revenue:.2f}</h2>
         </div>
         """, unsafe_allow_html=True)
-
-    except:
-        st.error("Prediction failed.")
 
 # ----------------------------
 # OPTIMIZATION
 # ----------------------------
 def optimize_price(sample_row):
     prices = np.linspace(base_price * 0.5, base_price * 1.5, 50)
-    revenues = []
 
-    best_price = None
+    best_price = 0
     max_revenue = -np.inf
+    revenues = []
 
     for p in prices:
         temp = sample_row.copy()
@@ -189,23 +204,26 @@ def optimize_price(sample_row):
 
     return prices, revenues, best_price, max_revenue
 
-if optimize_clicked:
-    try:
+# ----------------------------
+# OPTIMIZATION UI
+# ----------------------------
+with col2:
+    st.subheader("🎯 Price Optimization")
+
+    if st.button("Find Optimal Price"):
         prices, revenues, best_price, max_rev = optimize_price(input_data)
 
-        col1, col2 = st.columns(2)
-
-        col1.markdown(f"""
-        <div class="card">
-        <h4>🎯 Optimal Price</h4>
-        <h2>£{best_price:.2f}</h2>
+        st.markdown(f"""
+        <div class="metric-box">
+            <h3>🎯 Best Price</h3>
+            <h2>£{best_price:.2f}</h2>
         </div>
         """, unsafe_allow_html=True)
 
-        col2.markdown(f"""
-        <div class="card">
-        <h4>💰 Max Revenue</h4>
-        <h2>£{max_rev:.2f}</h2>
+        st.markdown(f"""
+        <div class="metric-box">
+            <h3>💰 Max Revenue</h3>
+            <h2>£{max_rev:.2f}</h2>
         </div>
         """, unsafe_allow_html=True)
 
@@ -213,29 +231,8 @@ if optimize_clicked:
         fig, ax = plt.subplots()
         ax.plot(prices, revenues)
         ax.axvline(best_price, linestyle='--')
-
         ax.set_xlabel("Price (£)")
         ax.set_ylabel("Revenue")
         ax.set_title("Revenue Optimization Curve")
-        ax.grid(True)
 
         st.pyplot(fig)
-
-    except:
-        st.error("Optimization failed.")
-
-# ----------------------------
-# ABOUT
-# ----------------------------
-st.markdown("---")
-st.markdown("## 📘 About This App")
-
-st.info("""
-This AI-powered dashboard helps retailers:
-
-✔ Predict product demand  
-✔ Estimate revenue  
-✔ Optimize pricing strategy  
-
-Built with Machine Learning + Streamlit Cloud.
-""")
