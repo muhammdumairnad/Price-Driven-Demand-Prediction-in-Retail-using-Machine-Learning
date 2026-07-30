@@ -6,37 +6,51 @@ import matplotlib.pyplot as plt
 import datetime
 
 # ----------------------------
-# LOAD MODEL
+# PAGE CONFIG
 # ----------------------------
-model = joblib.load("model.pkl")
+st.set_page_config(page_title="Demand Prediction App", layout="wide")
 
-st.set_page_config(page_title="Demand Prediction App", layout="centered")
+# ----------------------------
+# LOAD MODEL (SAFE)
+# ----------------------------
+try:
+    model = joblib.load("model.pkl")
+except Exception as e:
+    st.error("❌ Model failed to load. Check model.pkl file.")
+    st.stop()
 
-st.title("📊 Price-Driven Demand Prediction System")
-st.write("Predict demand and optimize price using Machine Learning")
+# ----------------------------
+# HEADER
+# ----------------------------
+st.markdown("# 🛒 Retail Demand Prediction Dashboard")
+st.markdown("Predict demand and optimize pricing using Machine Learning")
 
 # ----------------------------
 # SIDEBAR
 # ----------------------------
-st.sidebar.header("Settings")
-st.sidebar.write("Adjust parameters")
+st.sidebar.header("⚙️ Settings")
+st.sidebar.info("Adjust parameters and explore predictions")
 
 # ----------------------------
-# USER INPUTS
+# INPUT SECTION (COLUMNS)
 # ----------------------------
-store_id = st.number_input("Store ID", 1, 100, 1)
-sku_id = st.number_input("SKU ID", 1, 5000, 1)
-total_price = st.number_input("Price (£)", 1.0, 500.0, 50.0)
-base_price = st.number_input("Base Price (£)", 1.0, 500.0, 60.0)
-is_featured = st.selectbox("Featured?", [0, 1])
-is_display = st.selectbox("Display?", [0, 1])
+col1, col2 = st.columns(2)
+
+with col1:
+    store_id = st.number_input("Store ID", 1, 100, 1)
+    sku_id = st.number_input("SKU ID", 1, 5000, 1)
+    is_featured = st.selectbox("Featured?", [0, 1])
+
+with col2:
+    total_price = st.number_input("Price (£)", 1.0, 500.0, 50.0)
+    base_price = st.number_input("Base Price (£)", 1.0, 500.0, 60.0)
+    is_display = st.selectbox("Display?", [0, 1])
 
 # ----------------------------
 # FEATURE ENGINEERING
 # ----------------------------
 discount = base_price - total_price
 
-# Time features (improved)
 today = datetime.datetime.now()
 month = today.month
 day = today.day
@@ -47,7 +61,7 @@ day_sin = np.sin(2 * np.pi * day / 31)
 day_cos = np.cos(2 * np.pi * day / 31)
 
 # ----------------------------
-# CREATE INPUT DATAFRAME
+# CREATE INPUT DATA
 # ----------------------------
 input_data = pd.DataFrame({
     'store_id': [store_id],
@@ -62,19 +76,26 @@ input_data = pd.DataFrame({
     'day_cos': [day_cos]
 })
 
-# Ensure correct feature order
+# Ensure feature order matches model
 if hasattr(model, "feature_names_in_"):
     input_data = input_data[model.feature_names_in_]
 
 # ----------------------------
-# PREDICTION
+# PREDICTION SECTION
 # ----------------------------
-if st.button("Predict Demand"):
-    demand = model.predict(input_data)[0]
-    revenue = demand * total_price
+st.markdown("## 📊 Prediction")
 
-    st.success(f"📦 Predicted Demand: {int(demand)} units")
-    st.success(f"💰 Expected Revenue: £{revenue:.2f}")
+if st.button("🔍 Predict Demand"):
+    try:
+        demand = model.predict(input_data)[0]
+        revenue = demand * total_price
+
+        col1, col2 = st.columns(2)
+        col1.metric("📦 Predicted Demand", int(demand))
+        col2.metric("💰 Expected Revenue", f"£{revenue:.2f}")
+
+    except Exception as e:
+        st.error("Prediction failed. Check input format.")
 
 # ----------------------------
 # OPTIMIZATION FUNCTION
@@ -92,7 +113,6 @@ def optimize_price(sample_row):
         temp['total_price'] = p
         temp['discount'] = base_price - p
 
-        # Ensure DataFrame format
         temp_df = pd.DataFrame(temp)
 
         if hasattr(model, "feature_names_in_"):
@@ -110,22 +130,44 @@ def optimize_price(sample_row):
     return prices, revenues, best_price, max_revenue
 
 # ----------------------------
-# OPTIMIZATION BUTTON
+# OPTIMIZATION SECTION
 # ----------------------------
-if st.button("Find Optimal Price"):
-    prices, revenues, best_price, max_rev = optimize_price(input_data)
+st.markdown("## 🎯 Price Optimization")
 
-    st.success(f"🎯 Optimal Price: £{best_price:.2f}")
-    st.success(f"💰 Max Revenue: £{max_rev:.2f}")
+if st.button("📈 Find Optimal Price"):
+    try:
+        prices, revenues, best_price, max_rev = optimize_price(input_data)
 
-    # Plot
-    fig, ax = plt.subplots()
-    ax.plot(prices, revenues, label="Revenue Curve")
-    ax.axvline(best_price, linestyle='--', label="Optimal Price")
+        col1, col2 = st.columns(2)
+        col1.metric("🎯 Optimal Price", f"£{best_price:.2f}")
+        col2.metric("💰 Max Revenue", f"£{max_rev:.2f}")
 
-    ax.set_xlabel("Price (£)")
-    ax.set_ylabel("Revenue")
-    ax.set_title("Revenue Optimization Curve")
-    ax.legend()
+        # Plot
+        fig, ax = plt.subplots()
+        ax.plot(prices, revenues, label="Revenue Curve")
+        ax.axvline(best_price, linestyle='--', label="Optimal Price")
 
-    st.pyplot(fig)
+        ax.set_xlabel("Price (£)")
+        ax.set_ylabel("Revenue")
+        ax.set_title("Revenue Optimization Curve")
+        ax.legend()
+
+        st.pyplot(fig)
+
+    except Exception as e:
+        st.error("Optimization failed.")
+
+# ----------------------------
+# ABOUT SECTION
+# ----------------------------
+st.markdown("## 📘 About This App")
+st.info("""
+This app predicts product demand based on pricing strategy using a Machine Learning model.
+
+Features:
+- 📦 Demand prediction
+- 💰 Revenue estimation
+- 🎯 Price optimization
+
+Built using Streamlit and deployed on Streamlit Cloud.
+""")
