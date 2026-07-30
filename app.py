@@ -1,125 +1,100 @@
-%%writefile app.py
 import streamlit as st
 import numpy as np
 import pandas as pd
 import joblib
-import matplotlib.pyplot as plt
+import plotly.express as px
 import datetime
 
 # ----------------------------
 # PAGE CONFIG
 # ----------------------------
-st.set_page_config(
-    page_title="Demand Prediction Dashboard",
-    page_icon="📊",
-    layout="wide"
-)
+st.set_page_config(page_title="Retail AI Dashboard", layout="wide")
 
 # ----------------------------
-# LOAD MODEL (SAFE)
+# LOGIN SYSTEM
+# ----------------------------
+def login():
+    st.title("🔐 Login to Dashboard")
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+        if username == "admin" and password == "1234":
+            st.session_state["logged_in"] = True
+            st.success("Login successful ✅")
+            st.rerun()
+        else:
+            st.error("Invalid credentials ❌")
+
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    login()
+    st.stop()
+
+# ----------------------------
+# LOAD MODEL
 # ----------------------------
 @st.cache_resource
 def load_model():
-    try:
-        return joblib.load("model.pkl")
-    except Exception as e:
-        st.error("❌ Model not found! Please upload model.pkl to GitHub.")
-        st.stop()
+    return joblib.load("model.pkl")
 
 model = load_model()
 
 # ----------------------------
-# CUSTOM CSS (PREMIUM UI)
+# PREMIUM UI
 # ----------------------------
 st.markdown("""
 <style>
 .main {background-color: #0e1117;}
-h1, h2, h3 {color: #ffffff;}
-.stButton>button {
-    background-color: #4CAF50;
-    color: white;
-    border-radius: 10px;
-    height: 3em;
-    width: 100%;
-}
-.metric-box {
-    background-color: #1c1f26;
+h1, h2, h3 {color: white;}
+.metric {
+    background: #1c1f26;
     padding: 20px;
-    border-radius: 10px;
+    border-radius: 12px;
     text-align: center;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------------------
-# TITLE
-# ----------------------------
-st.title("📊 Price-Driven Demand Prediction Dashboard")
-st.markdown("### 💡 Predict demand & optimize pricing using Machine Learning")
+st.title("📊 Retail Demand Prediction AI")
 
 # ----------------------------
-# SIDEBAR (IMPROVED)
+# SIDEBAR (NO LIMIT INPUTS)
 # ----------------------------
 with st.sidebar:
-    st.header("⚙️ Control Panel")
+    st.header("⚙️ Inputs")
 
-    store_id = st.number_input(
-        "Store ID",
-        min_value=1,
-        max_value=100,
-        value=1,
-        step=1
-    )
+    store_id = st.text_input("Store ID", "1")
+    sku_id = st.text_input("SKU ID", "1")
 
-    sku_id = st.number_input(
-        "SKU ID",
-        min_value=1,
-        max_value=5000,
-        value=1,
-        step=1
-    )
+    total_price = st.text_input("Selling Price (£)", "50")
+    base_price = st.text_input("Base Price (£)", "60")
 
-    total_price = st.number_input(
-        "Selling Price (£)",
-        min_value=1.0,
-        max_value=1000.0,
-        value=50.0,
-        step=1.0,
-        format="%.2f"
-    )
+    is_featured = st.selectbox("Featured?", ["No", "Yes"])
+    is_display = st.selectbox("Display?", ["No", "Yes"])
 
-    base_price = st.number_input(
-        "Base Price (£)",
-        min_value=1.0,
-        max_value=1000.0,
-        value=60.0,
-        step=1.0,
-        format="%.2f"
-    )
+# Convert inputs safely
+try:
+    store_id = int(store_id)
+    sku_id = int(sku_id)
+    total_price = float(total_price)
+    base_price = float(base_price)
+except:
+    st.error("❌ Please enter valid numeric values")
+    st.stop()
 
-    is_featured = st.selectbox("Featured Product?", ["No", "Yes"])
-    is_display = st.selectbox("On Display?", ["No", "Yes"])
-
-    st.markdown("---")
-    st.info("💡 Tip: Keep base price ≥ selling price for realistic results")
-
-# Convert Yes/No to 0/1
 is_featured = 1 if is_featured == "Yes" else 0
 is_display = 1 if is_display == "Yes" else 0
 
 # ----------------------------
-# VALIDATION
+# FEATURES
 # ----------------------------
-if base_price < total_price:
-    st.warning("⚠️ Selling price is higher than base price (unusual case)")
-
 discount = base_price - total_price
 
-# ----------------------------
-# TIME FEATURES
-# ----------------------------
 today = datetime.datetime.now()
-
 month_sin = np.sin(2 * np.pi * today.month / 12)
 month_cos = np.cos(2 * np.pi * today.month / 12)
 day_sin = np.sin(2 * np.pi * today.day / 31)
@@ -145,43 +120,45 @@ if hasattr(model, "feature_names_in_"):
     input_data = input_data[model.feature_names_in_]
 
 # ----------------------------
-# MAIN LAYOUT (2 COLUMNS)
+# BUTTONS
 # ----------------------------
 col1, col2 = st.columns(2)
+
+predict_btn = col1.button("🔍 Predict Demand")
+optimize_btn = col2.button("📈 Optimize Price")
 
 # ----------------------------
 # PREDICTION
 # ----------------------------
-with col1:
-    st.subheader("📦 Demand Prediction")
+if predict_btn:
+    demand = model.predict(input_data)[0]
+    revenue = demand * total_price
 
-    if st.button("Predict Demand"):
-        demand = model.predict(input_data)[0]
-        revenue = demand * total_price
+    c1, c2 = st.columns(2)
 
-        st.markdown(f"""
-        <div class="metric-box">
-            <h3>📦 Demand</h3>
-            <h2>{int(demand)}</h2>
-        </div>
-        """, unsafe_allow_html=True)
+    c1.markdown(f"""
+    <div class="metric">
+    <h3>📦 Demand</h3>
+    <h2>{int(demand)}</h2>
+    </div>
+    """, unsafe_allow_html=True)
 
-        st.markdown(f"""
-        <div class="metric-box">
-            <h3>💰 Revenue</h3>
-            <h2>£{revenue:.2f}</h2>
-        </div>
-        """, unsafe_allow_html=True)
+    c2.markdown(f"""
+    <div class="metric">
+    <h3>💰 Revenue</h3>
+    <h2>£{revenue:.2f}</h2>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ----------------------------
 # OPTIMIZATION
 # ----------------------------
 def optimize_price(sample_row):
     prices = np.linspace(base_price * 0.5, base_price * 1.5, 50)
+    revenues = []
 
     best_price = 0
     max_revenue = -np.inf
-    revenues = []
 
     for p in prices:
         temp = sample_row.copy()
@@ -205,34 +182,36 @@ def optimize_price(sample_row):
     return prices, revenues, best_price, max_revenue
 
 # ----------------------------
-# OPTIMIZATION UI
+# OPTIMIZATION OUTPUT
 # ----------------------------
-with col2:
-    st.subheader("🎯 Price Optimization")
+if optimize_btn:
+    prices, revenues, best_price, max_rev = optimize_price(input_data)
 
-    if st.button("Find Optimal Price"):
-        prices, revenues, best_price, max_rev = optimize_price(input_data)
+    c1, c2 = st.columns(2)
 
-        st.markdown(f"""
-        <div class="metric-box">
-            <h3>🎯 Best Price</h3>
-            <h2>£{best_price:.2f}</h2>
-        </div>
-        """, unsafe_allow_html=True)
+    c1.markdown(f"""
+    <div class="metric">
+    <h3>🎯 Best Price</h3>
+    <h2>£{best_price:.2f}</h2>
+    </div>
+    """, unsafe_allow_html=True)
 
-        st.markdown(f"""
-        <div class="metric-box">
-            <h3>💰 Max Revenue</h3>
-            <h2>£{max_rev:.2f}</h2>
-        </div>
-        """, unsafe_allow_html=True)
+    c2.markdown(f"""
+    <div class="metric">
+    <h3>💰 Max Revenue</h3>
+    <h2>£{max_rev:.2f}</h2>
+    </div>
+    """, unsafe_allow_html=True)
 
-        # Plot
-        fig, ax = plt.subplots()
-        ax.plot(prices, revenues)
-        ax.axvline(best_price, linestyle='--')
-        ax.set_xlabel("Price (£)")
-        ax.set_ylabel("Revenue")
-        ax.set_title("Revenue Optimization Curve")
+    # ----------------------------
+    # INTERACTIVE PLOTLY CHART
+    # ----------------------------
+    df_plot = pd.DataFrame({
+        "Price": prices,
+        "Revenue": revenues
+    })
 
-        st.pyplot(fig)
+    fig = px.line(df_plot, x="Price", y="Revenue",
+                  title="Revenue vs Price Optimization")
+
+    st.plotly_chart(fig, use_container_width=True)
